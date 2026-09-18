@@ -390,17 +390,23 @@ function setSeed(seed, { pushUrl = true } = {}) {
 }
 
 function measure() {
-  if (state.collapsed >= 0) { uncollapse(); return; }
-  // Born rule, classical edition: probability = occupancy of each basin.
-  const counts = new Array(state.wells.length).fill(0);
-  for (let i = 0; i < state.n; i++) counts[state.basin[i]]++;
-  let r = Math.random() * state.n, pick = 0;
-  for (let i = 0; i < counts.length; i++) { r -= counts[i]; if (r <= 0) { pick = i; break; } }
+  let pick;
+  if (state.collapsed >= 0) {
+    // Already collapsed: a fresh measurement lands in a different basin.
+    const others = state.wells.map((_, i) => i).filter(i => i !== state.collapsed);
+    pick = others[Math.floor(Math.random() * others.length)];
+  } else {
+    // Born rule, classical edition: probability = occupancy of each basin.
+    const counts = new Array(state.wells.length).fill(0);
+    for (let i = 0; i < state.n; i++) counts[state.basin[i]]++;
+    let r = Math.random() * state.n; pick = 0;
+    for (let i = 0; i < counts.length; i++) { r -= counts[i]; if (r <= 0) { pick = i; break; } }
+  }
   state.collapsed = pick;
   state.collapseT = 0;
   state.kT = state.baseKT * 0.25;
   measureBtn.setAttribute('aria-pressed', 'true');
-  measureBtn.setAttribute('aria-label', `Collapsed into ${DESTINATIONS[pick].label}. Press again to release`);
+  measureBtn.setAttribute('aria-label', `Collapsed into ${DESTINATIONS[pick].label}. Tap again for a new measurement; click the landscape to release`);
   showInside(() => {
     const d = DESTINATIONS[pick];
     const a = document.createElement('a');
