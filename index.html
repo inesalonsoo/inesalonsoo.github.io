@@ -27,9 +27,6 @@
       </button>
     </div>
     <div class="control-group">
-      <button id="measure" class="icon-btn" type="button" aria-pressed="false" aria-label="Measure: collapse the ensemble into one basin" title="Measure (Space)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-      </button>
       <button id="pause" class="icon-btn" type="button" aria-pressed="false" aria-label="Pause animation" title="Pause (P)">
         <svg class="pause-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
         <svg class="play-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z"/></svg>
@@ -42,7 +39,7 @@
   </header>
 
   <main id="stage" tabindex="0"
-        aria-label="Interactive free-energy landscape. Particles diffuse between metastable basins under overdamped Langevin dynamics. Drag or hover to push the ensemble; press Space to measure and collapse it into one basin; press R for a new landscape; press P to pause.">
+        aria-label="Interactive free-energy landscape. Particles diffuse between metastable basins under overdamped Langevin dynamics. Drag or hover to push the ensemble; tap the uncertainty box or press Space to measure and collapse it into one basin; press R for a new landscape; press P to pause.">
     <canvas id="field" aria-hidden="true"></canvas>
     <div id="basins"></div>
   </main>
@@ -51,6 +48,27 @@
     <h1>Inés Alonso</h1>
     <p>Interpretable, verifiable AI for quantum and physical sciences.</p>
     <span class="stat"><span class="hide-sm">overdamped langevin · </span><span id="stat">4 basins · kT 0.08</span></span>
+  </div>
+
+  <div class="box" id="box">
+    <div class="scene" id="measure" role="button" tabindex="0" aria-pressed="false" aria-label="The uncertainty box. Tap to measure the system and collapse it into one basin">
+      <div class="cube" id="cube">
+        <div class="face front">
+          <svg class="cat" viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M52 19 L49 4 L60 15 Q62 14 66 15 L76 4 L73 19 Q80 24 78 34 Q76 44 66 45 Q56 45 52 36 Q50 26 52 19 Z"/>
+            <path d="M58 44 C76 48 84 66 79 92 L37 92 C32 70 40 52 56 44 Z"/>
+            <path d="M40 90 C16 90 8 68 20 58" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+          <p class="inside" id="inside" aria-live="polite">tap to measure</p>
+        </div>
+        <div class="face back"></div>
+        <div class="face right"></div>
+        <div class="face left"></div>
+        <div class="face top"></div>
+        <div class="face bottom"></div>
+      </div>
+    </div>
+    <p class="box-label">the uncertainty box<br><span>observe · collapse · discover</span></p>
   </div>
 
   <nav class="links" aria-label="Inés Alonso's links">

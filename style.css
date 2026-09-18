@@ -85,7 +85,6 @@ a { color: inherit; }
 .seed-control { min-width: 118px; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
 .icon-btn svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 
-#measure[aria-pressed=true] { color: var(--accent); }
 .icon-btn .play-mark, :root[data-theme=light] .icon-btn .sun, .icon-btn .moon { display: none; }
 :root[data-theme=light] .icon-btn .moon, .paused .icon-btn .play-mark { display: block; }
 .paused .icon-btn .pause-mark { display: none; }
@@ -132,6 +131,97 @@ canvas { width: 100%; height: 100%; display: block; }
 .caption h1 { margin: 0 0 6px; font-size: clamp(26px, 4vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .caption p { margin: 0; color: var(--muted); font-size: 15px; }
 .caption .stat { display: block; margin-top: 10px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; color: var(--muted); opacity: .8; }
+
+/* ---------- The uncertainty box ---------- */
+.box {
+  --size: 150px;
+  position: absolute;
+  z-index: 3;
+  right: 40px;
+  bottom: 96px;
+  width: 230px;
+  text-align: center;
+}
+.scene {
+  width: var(--size);
+  height: var(--size);
+  margin: 0 auto;
+  perspective: 900px;
+  cursor: pointer;
+  outline-offset: 10px;
+  border-radius: 12px;
+}
+.cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(-18deg) rotateY(30deg);
+  animation: turn 28s linear infinite;
+  transition: transform .9s cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes turn {
+  from { transform: rotateX(-18deg) rotateY(0deg); }
+  to   { transform: rotateX(-18deg) rotateY(360deg); }
+}
+.scene:hover .cube { animation-play-state: paused; }
+.scene[aria-pressed=true] .cube {
+  animation: none;
+  transform: rotateX(0deg) rotateY(0deg) scale(1.08);
+}
+.face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--soft) 42%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .18);
+}
+.front  { transform: translateZ(calc(var(--size) / 2)); }
+.back   { transform: rotateY(180deg) translateZ(calc(var(--size) / 2)); }
+.right  { transform: rotateY(90deg) translateZ(calc(var(--size) / 2)); }
+.left   { transform: rotateY(-90deg) translateZ(calc(var(--size) / 2)); }
+.top    { transform: rotateX(90deg) translateZ(calc(var(--size) / 2)); }
+.bottom { transform: rotateX(-90deg) translateZ(calc(var(--size) / 2)); }
+.cat {
+  position: absolute;
+  width: 62%;
+  height: 62%;
+  fill: currentColor;
+  color: var(--ink);
+  opacity: 0;
+  transform: scale(.85);
+  transition: opacity 1.1s cubic-bezier(.4, 0, .2, 1), transform 1.1s ease;
+  pointer-events: none;
+}
+.scene[aria-pressed=true] .cat { opacity: .5; transform: scale(1); }
+.inside {
+  position: relative;
+  margin: 0;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .06em;
+  color: var(--muted);
+  text-align: center;
+  transition: opacity .35s, transform .35s;
+}
+.inside a { color: var(--accent); text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 6px; background: color-mix(in srgb, var(--bg) 82%, transparent); }
+.inside a:hover { text-decoration: underline; }
+.inside.swap { opacity: 0; transform: translateY(-8px); }
+.box-label {
+  margin: 44px 0 0;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.box-label span { opacity: .65; letter-spacing: .06em; }
 
 .links {
   position: absolute;
@@ -228,7 +318,12 @@ footer a:hover { color: var(--accent); }
   .brand { display: none; }
   .hide-sm { display: none; }
   .seed-control { min-width: 104px; padding: 0 8px; }
-  .caption { left: 16px; right: 16px; bottom: 118px; }
+  .caption { left: 16px; right: 140px; bottom: 118px; }
+  .box { --size: 88px; width: 140px; right: 8px; bottom: 122px; }
+  .box-label { font-size: 10px; margin-top: 28px; }
+  .box-label span { display: none; }
+  .inside { font-size: 10px; padding: 6px; }
+  .inside a { font-size: 11px; }
   .caption p { font-size: 14px; }
   .links { width: calc(100% - 28px); max-width: 420px; justify-content: space-between; gap: 0; padding: 12px 0 0; }
   .links a { width: 44px; height: 44px; padding: 10px; }
@@ -245,5 +340,6 @@ footer a:hover { color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .cube { animation: none; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }

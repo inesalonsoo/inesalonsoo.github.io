@@ -10,7 +10,8 @@ const basinsEl = document.querySelector('#basins');
 const seedCode = document.querySelector('#seed-code');
 const statEl = document.querySelector('#stat');
 const randomizeBtn = document.querySelector('#randomize');
-const measureBtn = document.querySelector('#measure');
+const measureBtn = document.querySelector('#measure'); // the uncertainty box
+const insideEl = document.querySelector('#inside');
 const pauseBtn = document.querySelector('#pause');
 const themeBtn = document.querySelector('#theme');
 const shareLink = document.querySelector('#share-seed');
@@ -100,8 +101,9 @@ function buildWells(seed) {
   while (wells.length < DESTINATIONS.length && guard++ < 4000) {
     const x = (rnd() * 2 - 1) * xr * a;
     const y = yTop + rnd() * (yBot - yTop);
-    // keep the bottom-left corner free for the caption
+    // keep the bottom-left corner free for the caption and the bottom-right for the box
     if (x < -0.05 * a && y > 0.12) continue;
+    if (x > 0.45 * a && y > 0.08) continue;
     if (wells.some(w => Math.hypot(w.x - x, w.y - y) < 0.66)) continue;
     wells.push({ x, y, depth: 0.34 + rnd() * 0.22, sx: 0.2 + rnd() * 0.12, sy: 0.2 + rnd() * 0.12 });
   }
@@ -399,6 +401,13 @@ function measure() {
   state.kT = state.baseKT * 0.25;
   measureBtn.setAttribute('aria-pressed', 'true');
   measureBtn.setAttribute('aria-label', `Collapsed into ${DESTINATIONS[pick].label}. Press again to release`);
+  showInside(() => {
+    const d = DESTINATIONS[pick];
+    const a = document.createElement('a');
+    a.href = d.href; a.textContent = d.label;
+    if (d.href.startsWith('http')) a.rel = 'noopener noreferrer';
+    insideEl.replaceChildren(a);
+  });
   styleLabels();
   if (state.paused) { for (let s = 0; s < 400; s++) { state.collapseT += DT * SUBSTEPS * 6; step(); } recordTrails(); draw(); }
 }
@@ -407,8 +416,14 @@ function uncollapse() {
   state.collapseT = 0;
   state.kT = state.baseKT;
   measureBtn.setAttribute('aria-pressed', 'false');
-  measureBtn.setAttribute('aria-label', 'Measure: collapse the ensemble into one basin');
+  measureBtn.setAttribute('aria-label', 'The uncertainty box. Tap to measure the system and collapse it into one basin');
+  if (insideEl.firstElementChild) showInside(() => { insideEl.textContent = 'tap to measure'; });
   styleLabels();
+}
+// Cross-fade the text inside the box.
+function showInside(update) {
+  insideEl.classList.add('swap');
+  setTimeout(() => { update(); insideEl.classList.remove('swap'); }, 350);
 }
 
 function setPaused(p) {
@@ -491,6 +506,7 @@ stage.addEventListener('pointermove', e => {
 });
 stage.addEventListener('pointerdown', e => {
   if (e.target.closest('.basin')) return;
+  if (state.collapsed >= 0) uncollapse(); // clicking the landscape resets the measurement
   const [x, y] = pointerToWorld(e);
   state.pointer.x = x; state.pointer.y = y; state.pointer.active = true; state.pointer.pressed = true;
   stage.setPointerCapture?.(e.pointerId);
@@ -502,7 +518,10 @@ stage.addEventListener('pointerleave', () => { state.pointer.active = false; sta
 
 // ---------- wiring ----------
 randomizeBtn.addEventListener('click', () => setSeed(randomSeed()));
-measureBtn.addEventListener('click', measure);
+measureBtn.addEventListener('click', e => { if (!e.target.closest('a')) measure(); });
+measureBtn.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); measure(); }
+});
 pauseBtn.addEventListener('click', () => setPaused(!state.paused));
 themeBtn.addEventListener('click', () => setTheme(isLight() ? 'dark' : 'light'));
 shareLink?.addEventListener('click', async e => {
