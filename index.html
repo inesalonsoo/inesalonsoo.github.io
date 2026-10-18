@@ -12,7 +12,7 @@
   <meta property="og:url" content="https://inesalonsoo.github.io/">
   <meta property="og:type" content="website">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=3">
   <script src="theme.js?v=1"></script>
 </head>
 <body>
@@ -39,7 +39,8 @@
   </header>
 
   <main id="stage" tabindex="0"
-        aria-label="Interactive free-energy landscape. Particles diffuse between metastable basins under overdamped Langevin dynamics. Drag or hover to push the ensemble; tap the uncertainty box or press Space to measure and collapse it into one basin; press R for a new landscape; press P to pause.">
+        aria-label="Interactive free-energy landscape. Particles diffuse between metastable basins under overdamped Langevin dynamics. Drag or hover to push the ensemble; hover or tap the résumé basin to resolve it into three résumés; tap the uncertainty box or press Space to measure and collapse it into one basin; press R for a new landscape; press P to pause.">
+    <canvas id="landscape" aria-hidden="true"></canvas>
     <canvas id="field" aria-hidden="true"></canvas>
     <div id="basins"></div>
   </main>
@@ -75,7 +76,7 @@
     <a href="#research" aria-label="Research" title="Research"><svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16m0 0-6-6m6 6 6-6"/></svg></a>
     <a href="https://github.com/inesalonsoo" aria-label="GitHub" title="GitHub" rel="noopener noreferrer"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M36,20.3c0,3.5-1,6.6-3.1,9.4c-2,2.8-4.7,4.7-7.9,5.8c-0.4,0.1-0.6,0-0.8-0.1c-0.2-0.2-0.3-0.4-0.3-0.6v-4.4 c0-1.3-0.4-2.3-1.1-3c0.8-0.1,1.5-0.2,2.1-0.4c0.6-0.2,1.3-0.4,2-0.8c0.7-0.4,1.2-0.8,1.7-1.4c0.5-0.5,0.8-1.3,1.1-2.2 s0.4-2,0.4-3.1c0-1.7-0.5-3.1-1.6-4.3c0.5-1.3,0.5-2.7-0.2-4.2c-0.4-0.1-1,0-1.7,0.2c-0.7,0.3-1.4,0.6-1.9,0.9L24,12.5 c-1.3-0.4-2.6-0.5-4-0.5s-2.7,0.2-4,0.5c-0.2-0.2-0.5-0.3-0.9-0.6c-0.4-0.2-0.9-0.5-1.7-0.8c-0.8-0.3-1.4-0.4-1.8-0.3 c-0.6,1.6-0.7,3-0.1,4.2c-1.1,1.2-1.6,2.6-1.6,4.3c0,1.2,0.1,2.2,0.4,3.1s0.6,1.6,1.1,2.2s1,1,1.7,1.4c0.7,0.4,1.3,0.6,2,0.8 c0.6,0.2,1.3,0.3,2.1,0.4c-0.6,0.5-0.9,1.2-1,2.1c-0.3,0.1-0.6,0.2-0.9,0.3c-0.3,0.1-0.7,0.1-1.2,0.1c-0.5,0-0.9-0.1-1.4-0.4 c-0.5-0.3-0.8-0.7-1.2-1.3c-0.3-0.4-0.6-0.8-1-1.1c-0.4-0.3-0.8-0.4-1-0.5L9,26.5c-0.3,0-0.5,0-0.6,0.1c-0.1,0.1-0.1,0.1-0.1,0.2 c0,0.1,0.1,0.2,0.2,0.3c0.1,0.1,0.2,0.2,0.3,0.2l0.1,0.1c0.3,0.1,0.6,0.4,0.9,0.8s0.5,0.7,0.7,1.1l0.2,0.5c0.2,0.5,0.5,1,0.9,1.3 c0.4,0.3,0.9,0.5,1.4,0.6c0.5,0.1,1,0.1,1.4,0.1c0.5,0,0.9,0,1.2-0.1l0.5-0.1c0,0.5,0,1.1,0,1.9c0,0.7,0,1.1,0,1.1 c0,0.2-0.1,0.5-0.3,0.6c-0.2,0.2-0.5,0.2-0.8,0.1c-3.2-1.1-5.8-3-7.9-5.8S4,23.8,4,20.3c0-2.9,0.7-5.6,2.1-8S9.5,7.8,12,6.4 s5.1-2.1,8-2.1s5.6,0.7,8,2.1s4.4,3.4,5.8,5.8S36,17.4,36,20.3L36,20.3z"/></svg></a>
     <a href="https://www.linkedin.com/in/inesalonsocl/" aria-label="LinkedIn" title="LinkedIn" rel="noopener noreferrer"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M12.1,13.8v19.1H5.7V13.8C5.7,13.8,12.1,13.8,12.1,13.8z M12.5,7.9c0,0.9-0.3,1.7-1,2.4c-0.7,0.6-1.5,0.9-2.6,0.9h0 c-1.1,0-1.9-0.3-2.5-0.9c-0.6-0.6-1-1.4-1-2.4c0-1,0.3-1.7,1-2.4S7.9,4.6,9,4.6s1.9,0.3,2.6,0.9S12.5,6.9,12.5,7.9z M35,22v11h-6.4 V22.7c0-1.4-0.3-2.4-0.8-3.2c-0.5-0.8-1.3-1.1-2.4-1.1c-0.8,0-1.5,0.2-2,0.7c-0.5,0.4-1,1-1.2,1.7c-0.1,0.4-0.2,0.9-0.2,1.6v10.7 h-6.4c0-5.1,0-9.3,0-12.5s0-5.1,0-5.7l0-0.9H22v2.8h0c0.3-0.4,0.5-0.8,0.8-1.1c0.3-0.3,0.6-0.6,1.1-1c0.5-0.4,1-0.6,1.7-0.8 c0.7-0.2,1.4-0.3,2.2-0.3c2.2,0,4,0.7,5.3,2.2C34.4,17,35,19.1,35,22L35,22z"/></svg></a>
-    <a href="assets/IAlonso_Resume_2026.pdf" aria-label="Résumé (PDF)" title="Résumé (PDF)" rel="noopener noreferrer"><svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></a>
+    <a href="#resume" aria-label="Résumés" title="Résumés"><svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></a>
     <a href="mailto:ines.alonso.clemente.de.diego@gmail.com" aria-label="Email" title="Email"><svg class="stroke" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></a>
   </nav>
 </div>
@@ -87,6 +88,31 @@
     <p class="eyebrow">About</p>
     <p class="lede">I study how to make AI more <em>interpretable and verifiable</em> when applied to quantum and physical systems, from Markov state models of photosynthetic proteins to quantum algorithms for excited states.</p>
     <p class="meta">B.S. Computer Science, minor in Applied Mathematics · Florida Polytechnic University (Dec 2026, GPA 3.95) · previously Physics at the University of Barcelona · currently SPIE@ICFO María Yzuel Fellow at the Institute of Photonic Sciences.</p>
+  </section>
+
+  <section id="resume">
+    <p class="eyebrow">Résumé</p>
+    <p class="meta resume-note">Look closely at the <span class="mono">|résumé⟩</span> basin above: it is three shallow wells, not one. Same system, three projections.</p>
+    <div class="cards">
+      <a class="card" href="assets/IAlonso_Resume_Industry.pdf">
+        <p class="where"><span class="ket">|industry⟩</span> · 1 page</p>
+        <h3>For hiring teams</h3>
+        <p>Machine learning, agentic AI and data pipelines for scientific data. Available full time from January 2027.</p>
+        <div class="foot"><span class="dl">download PDF</span></div>
+      </a>
+      <a class="card" href="assets/IAlonso_Resume_PhD.pdf">
+        <p class="where"><span class="ket">|phd⟩</span> · 1 page</p>
+        <h3>For graduate admissions</h3>
+        <p>Stochastic dynamics of molecular and learning systems, kinetic models, and verifiable ML for the physical sciences.</p>
+        <div class="foot"><span class="dl">download PDF</span></div>
+      </a>
+      <a class="card" href="assets/IAlonso_CV.pdf">
+        <p class="where"><span class="ket">|cv⟩</span> · 2 pages</p>
+        <h3>The full CV</h3>
+        <p>Every project, award and role, with supervisors and collaborators. No downsampling, no feature pruning.</p>
+        <div class="foot"><span class="dl">download PDF</span></div>
+      </a>
+    </div>
   </section>
 
   <section id="research">
@@ -102,16 +128,16 @@
       <article class="card">
         <p class="where">Florida Poly · PI Dr. Bradford Barker · Feb 2024 – present</p>
         <h3>q-sc-SF-EOM: a spin-flip quantum algorithm for ground and excited states</h3>
-        <p>Resolves ground and excited singlets in a single diagonalization from a high-spin reference. A completeness framework predicts spin contamination a priori from the fraction of the M<sub>S</sub>&nbsp;=&nbsp;0 space each operator manifold spans.</p>
-        <ul class="nums"><li>H₂: 52 → 16 CNOTs</li><li>H₄ manifold 9× smaller</li><li>5 molecules</li></ul>
-        <div class="foot">Qiskit · PySCF · <a href="#publications">poster at IEEE QCE26</a></div>
+        <p>Resolves ground and excited states in a single diagonalization from a high-spin reference. A completeness analysis explains when single flips give spin-contaminated states, from how much of the M<sub>S</sub>&nbsp;=&nbsp;0 space each operator pool reaches.</p>
+        <ul class="nums"><li>52 → 16 CNOTs</li><li>LiH within 0.1 eV at 3.3× fewer CNOTs</li><li>5 molecules</li></ul>
+        <div class="foot">Qiskit · PySCF · ADAPT-VQE · <a href="#publications">poster at IEEE QCE26</a></div>
       </article>
       <article class="card">
-        <p class="where">Independent research · Jul 2026</p>
+        <p class="where">Independent research · Jul 2026 – present</p>
         <h3>Agentic MSM benchmark engine</h3>
-        <p>A multi-agent LLM system (orchestrator / optimizer / validator) that designs analysis pipelines for noisy simulations. A deterministic physics gate — not the model — accepts results; ground-truth constants are formally verified in Lean 4.</p>
-        <ul class="nums"><li>rates within 1.87% of exact</li><li>4/4 runs converged</li><li>20 physics rejections</li></ul>
-        <div class="foot">Lean 4 / Mathlib · LLM APIs · Pydantic</div>
+        <p>A three-agent LLM system (orchestrator / optimizer / validator) proposes Markov state model analyses; only deterministic checks against exact physics, never the LLM, accept a result. Auditing it, I found its textbook rate gate was 6–10% off and replaced it with an exact oracle.</p>
+        <ul class="nums"><li>42/42 runs found both states</li><li>rates within ~3% of exact</li><li>Lean 4: 7 statements, 2 proved</li></ul>
+        <div class="foot">Lean 4 / Mathlib · LLM APIs · Pydantic · <a href="https://github.com/inesalonsoo/multiagent_for2Dphysics" rel="noopener noreferrer">code</a></div>
       </article>
     </div>
   </section>
@@ -120,15 +146,15 @@
     <p class="eyebrow">More projects</p>
     <ul class="list">
       <li>
-        <div><div class="title">Attention feedback for Hierarchical Reasoning Models</div><div class="sub">Bidirectional cross-attention feedback for two-timescale multi-hop reasoning. 85.15% F1 on HotPotQA with a 60.6M-parameter model, outperforming Llama 3.1 and Kimi-K2 at &lt;1% of their size. <a href="https://github.com/shriraj-m/HRM-for-coherence" rel="noopener noreferrer">code</a></div></div>
+        <div><div class="title">Attention feedback for Hierarchical Reasoning Models</div><div class="sub">Designed the token-level module of a 60.6M-parameter Hierarchical Reasoning Model variant for multi-hop QA on HotpotQA, where sentence- and token-level modules exchange information through bidirectional cross-attention. 4-person team, NLP course. <a href="https://github.com/shriraj-m/HRM-for-coherence" rel="noopener noreferrer">code</a></div></div>
         <span class="when">Nov 2025</span>
       </li>
       <li>
-        <div><div class="title">Mobile 3D scene capture · Threshold360</div><div class="sub">Research lead on a distributed reconstruction pipeline (FastAPI, CUDA, Gaussian splatting) producing mobile virtual tours in under 60 minutes. Sponsor-owned code.</div></div>
+        <div><div class="title">Mobile 3D scene capture · Threshold360</div><div class="sub">Research lead on a distributed reconstruction pipeline (FastAPI, CUDA, Gaussian splatting) producing mobile virtual tours in under 60 minutes, plus a React Native client for batched image upload. Sponsor-owned code.</div></div>
         <span class="when">Sep 2025 – May 2026</span>
       </li>
       <li>
-        <div><div class="title">High-altitude balloon recovery & sensing · NASA Florida Space Grant</div><div class="sub">Altitude-triggered parachute deployment (Arduino, BMP280, MOSFET) and real-time cosmic-ray, UV, and magnetic-field acquisition for a hydrogen balloon payload.</div></div>
+        <div><div class="title">High-altitude balloon recovery & sensing · NASA Florida Space Grant Space Trek</div><div class="sub">Altitude-triggered parachute deployment (Arduino, BMP280, MOSFET) and real-time cosmic-ray, UV, and magnetic-field acquisition for a hydrogen balloon payload.</div></div>
         <span class="when">Mar 2025</span>
       </li>
       <li>
@@ -142,19 +168,19 @@
     <p class="eyebrow">Publications & talks</p>
     <ul class="list">
       <li>
-        <div><div class="title">The q-sc-SF-EOM quantum algorithm for ground- and excited-states in molecules and solids</div><div class="sub"><strong>I. Alonso</strong> et al. — manuscript in preparation for arXiv.</div></div>
-        <span class="when">Sep 2026</span>
+        <div><div class="title">The q-sc-SF-EOM quantum algorithm for ground- and excited-states in molecules and solids</div><div class="sub"><strong>I. Alonso</strong>, W. J. Hall, S. Mandulapalli, D. A. Strubbe, B. A. Barker — manuscript in preparation.</div></div>
+        <span class="when">in prep.</span>
       </li>
       <li>
         <div><div class="title">Poster · IEEE Quantum Week (QCE26)</div><div class="sub">q-sc-SF-EOM · Toronto, Canada</div></div>
         <span class="when">Sep 2026</span>
       </li>
       <li>
-        <div><div class="title">Poster (selected, undergraduate) · SHPE National Convention</div><div class="sub">STEM Research Competition · Indianapolis, IN</div></div>
+        <div><div class="title">Poster (selected, undergraduate) · SHPE National Convention</div><div class="sub">STEM Research Competition, attendance fully funded · Indianapolis, IN</div></div>
         <span class="when">Oct 2026</span>
       </li>
       <li>
-        <div><div class="title">Oral & poster · NanoFlorida 2026</div><div class="sub">Lakeland, FL</div></div>
+        <div><div class="title">Lightning Round podium talk & poster · NanoFlorida 2026</div><div class="sub">Selected, 20 of 80 posters · Lakeland, FL</div></div>
         <span class="when">Oct 2026</span>
       </li>
     </ul>
@@ -165,8 +191,8 @@
       <div>
         <h3>Honors</h3>
         <ul>
-          <li>SPIE@ICFO María Yzuel Fellowship</li>
-          <li>FPU Merit Scholarship</li>
+          <li>SPIE@ICFO María Yzuel Fellowship <span>· 12-month research fellowship</span></li>
+          <li>Florida Poly Merit Scholarship</li>
           <li>Esperanza Inc. Scholarship</li>
           <li>President's List <span>(3 terms)</span></li>
           <li>IBM Qiskit Global Summer School 2025 <span>· Quantum Excellence Badge</span></li>
@@ -176,8 +202,9 @@
       <div>
         <h3>Leadership</h3>
         <ul>
-          <li>Sustainability President, Student Government <span>· founded the Sustainability Agency, led 8 ambassadors, built a 100 m² campus garden, 200+ attendee events</span></li>
+          <li>Sustainability President, Student Government <span>· founded the Sustainability Agency, led 8 ambassadors, built a 100 m² campus garden on a $2,500 budget, 200+ attendee events</span></li>
           <li>VP Internal Affairs, SHPE <span>· 2025 Certified Chapter Leader · 10 workshops, 8 heritage events</span></li>
+          <li>Resident Assistant <span>· 32 community events for 1,000+ residents</span></li>
         </ul>
       </div>
     </div>
@@ -187,8 +214,9 @@
     <p class="eyebrow">Skills</p>
     <div class="skill-row"><span class="k">languages</span><ul class="tags"><li class="hi">Python</li><li>C/C++</li><li>SQL</li><li class="hi">Lean 4</li><li>LaTeX</li><li>MATLAB</li><li>CUDA</li></ul></div>
     <div class="skill-row"><span class="k">ml · sci</span><ul class="tags"><li class="hi">PyTorch</li><li>scikit-learn</li><li>deeptime</li><li>PyEMMA</li><li>MDTraj</li><li>NumPy / SciPy</li><li class="hi">Qiskit</li><li>PySCF</li><li>LLM APIs</li></ul></div>
-    <div class="skill-row"><span class="k">tooling</span><ul class="tags"><li>Git / GitHub</li><li>Linux</li><li>Docker</li><li>REST APIs</li><li>Pydantic</li></ul></div>
-    <div class="skill-row"><span class="k">spoken</span><ul class="tags"><li>Spanish (native)</li><li>Catalan (native)</li><li>English (fluent)</li></ul></div>
+    <div class="skill-row"><span class="k">methods</span><ul class="tags"><li class="hi">Markov state models</li><li>TICA</li><li>VAMPnets</li><li>coarse-grained MD</li><li>SDEs</li><li>variational quantum algorithms</li><li>theorem formalization</li></ul></div>
+    <div class="skill-row"><span class="k">tooling</span><ul class="tags"><li>Git / GitHub</li><li>Linux</li><li>Docker</li><li>REST APIs / FastAPI</li><li>Pydantic</li><li>pytest</li></ul></div>
+    <div class="skill-row"><span class="k">spoken</span><ul class="tags"><li>Spanish (native)</li><li>Catalan (native)</li><li>English (fluent)</li><li>French (intermediate)</li></ul></div>
   </section>
 
 </div>
@@ -196,10 +224,10 @@
 <footer>
   <div class="inner">
     <span>Inés Alonso · <a href="mailto:ines.alonso.clemente.de.diego@gmail.com">ines.alonso.clemente.de.diego@gmail.com</a></span>
-    <span><a href="assets/IAlonso_Resume_2026.pdf">résumé</a> · <a href="https://github.com/inesalonsoo" rel="noopener noreferrer">github</a> · <a href="https://www.linkedin.com/in/inesalonsocl/" rel="noopener noreferrer">linkedin</a> · <a href="#" id="share-seed">share this landscape</a></span>
+    <span><a href="#resume">résumé</a> ·<a href="https://github.com/inesalonsoo" rel="noopener noreferrer">github</a> · <a href="https://www.linkedin.com/in/inesalonsocl/" rel="noopener noreferrer">linkedin</a> · <a href="#" id="share-seed">share this landscape</a></span>
   </div>
 </footer>
 
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>

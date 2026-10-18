@@ -3,8 +3,14 @@
 //   dx = -∇F(x) dt + sqrt(2 kT dt) ξ
 // Each basin is a "state" that links somewhere. "Measure" collapses the
 // ensemble into one basin, chosen with probability equal to its occupancy.
+// The |résumé⟩ basin is a macrostate: three shallow sub-wells the ensemble
+// hops between quickly, lumped like microstates in a Markov state model.
+// Hover it (or measure into it) and it resolves into its three states.
+// The wells breathe: each depth drifts slowly on its own period, so the
+// contour lines around every basin swell and settle.
 
 const stage = document.querySelector('#stage');
+const glCanvas = document.querySelector('#landscape');
 const canvas = document.querySelector('#field');
 const basinsEl = document.querySelector('#basins');
 const seedCode = document.querySelector('#seed-code');
@@ -15,17 +21,26 @@ const insideEl = document.querySelector('#inside');
 const pauseBtn = document.querySelector('#pause');
 const themeBtn = document.querySelector('#theme');
 const shareLink = document.querySelector('#share-seed');
-const ctx = canvas.getContext('2d', { alpha: false });
+const boxEl = document.querySelector('#box');
+const cube = document.querySelector('#cube');
+let land = initGL(); // { gl, u }, or null without WebGL2: the landscape is then drawn once on the CPU and holds still
+const ctx = canvas.getContext('2d', { alpha: !!land }); // particles, over the landscape
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 const isSmall = () => matchMedia('(max-width: 700px)').matches;
 
-// Basins are the "states" of this system, and where they lead.
+// Basins are the "states" of this system, and where they lead. A destination
+// with `states` is a macrostate whose sub-wells each lead somewhere.
 const DESTINATIONS = [
   { label: '|research⟩', href: '#research' },
   { label: '|github⟩', href: 'https://github.com/inesalonsoo' },
   { label: '|linkedin⟩', href: 'https://www.linkedin.com/in/inesalonsocl/' },
-  { label: '|résumé⟩', href: 'assets/IAlonso_Resume_2026.pdf' },
+  { label: '|résumé⟩', href: '#resume', states: [
+    { label: '|industry⟩', href: 'assets/IAlonso_Resume_Industry.pdf', title: 'Industry résumé · 1 page PDF' },
+    { label: '|phd⟩', href: 'assets/IAlonso_Resume_PhD.pdf', title: 'PhD résumé · 1 page PDF' },
+    { label: '|cv⟩', href: 'assets/IAlonso_CV.pdf', title: 'Full CV · 2 page PDF' },
+  ] },
 ];
+const MACRO = DESTINATIONS.findIndex(d => d.states);
 
 // ---------- seeded randomness ----------
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
@@ -57,7 +72,9 @@ const initialSeed = seedParam && /^[0-9a-fA-F]{8}$/.test(seedParam) ? parseInt(s
 
 const state = {
   seed: initialSeed,
-  wells: [],          // {x, y, depth, sx, sy}
+  wells: [],          // {x, y, depth, sx, sy, subs?, reach?} one per destination
+  gauss: [],          // the gaussians that make up F: plain wells and sub-wells, each tagged with .macro; .d is the breathing depth
+  time: 0,            // seconds of simulated (unpaused) time, drives the breathing
   particles: null,    // Float32Array [x0,y0,x1,y1,...]
   basin: null,        // Int8Array current basin per particle
   trails: null,       // Float32Array ring buffer of past positions
@@ -78,11 +95,52 @@ const DT = 0.0006;
 const SUBSTEPS = 3;
 
 // ---------- landscape ----------
+const isPortrait = () => isSmall() || state.aspect < 0.9;
 function buildWells(seed) {
   const rnd = mulberry32(seed);
+  const wells = placeWells(rnd);
+  // split after placing, so a seed lays its basins out the same as it always has
+  DESTINATIONS.forEach((d, i) => { if (d.states) splitWell(wells[i], d.states.length, rnd); });
+  state.gauss = wells.flatMap((w, i) => (w.subs || [w]).map(g => Object.assign(g, { macro: i })));
+  breathe(state.time);
+  return wells;
+}
+
+// Each well's depth drifts by ±9% on its own 9–15 s period. Near a well of
+// width σ that moves its contour rings by about ±0.09σ, slow and calm, and
+// almost nothing far from the wells. Only with WebGL: the CPU fallback
+// draws the landscape once, so there the wells hold still.
+const BREATH = 0.09;
+function breathe(t) {
+  const a = land ? BREATH : 0;
+  state.gauss.forEach((w, i) => {
+    const period = 9 + (i * 3.7) % 6;
+    w.d = w.depth * (1 + a * Math.sin(2 * Math.PI * t / period + i * 2.1));
+  });
+}
+
+// Turn a well into a macrostate: k narrow sub-wells on a ring two widths out.
+// The barrier between neighbours is about half a sub-well deep (~2 kT), so the
+// ensemble hops among them far faster than it escapes the basin.
+function splitWell(w, k, rnd) {
+  const portrait = isPortrait();
+  const s = portrait ? 0.065 : 0.1, r = 2 * s;
+  // landscape: a vertex up or down; portrait: a vertex toward the middle of the
+  // screen, so the other two stack vertically on the outer side and their labels fit
+  const a0 = portrait ? (w.x > 0 ? Math.PI : 0) : (rnd() < 0.5 ? -1 : 1) * Math.PI / 2;
+  // k narrow wells have ~1/k the volume of one wide one; +kT·ln k keeps the occupancy fair
+  const depth = w.depth + state.baseKT * Math.log(k);
+  w.subs = Array.from({ length: k }, (_, j) => {
+    const t = a0 + 2 * Math.PI * j / k;
+    return { x: w.x + r * Math.cos(t), y: w.y + r * Math.sin(t), sx: s, sy: s, depth };
+  });
+  w.reach = r + 2 * s;
+}
+
+function placeWells(rnd) {
   const a = state.aspect;
   const wells = [];
-  if (isSmall() || a < 0.9) {
+  if (isPortrait()) {
     // Portrait: a seeded zigzag down the upper two thirds, clear of the caption.
     const slots = [-0.66, -0.42, -0.18, 0.06];
     const order = slots.map((y, i) => i).sort(() => rnd() - 0.5);
@@ -115,11 +173,11 @@ function buildWells(seed) {
   return wells;
 }
 
-function potential(x, y) {
+function potential(x, y, base = false) {
   let F = 0.5 * state.confine * ((x / state.aspect) ** 2 + y * y);
-  for (const w of state.wells) {
+  for (const w of state.gauss) {
     const dx = (x - w.x) / w.sx, dy = (y - w.y) / w.sy;
-    F -= w.depth * Math.exp(-0.5 * (dx * dx + dy * dy));
+    F -= (base ? w.depth : w.d) * Math.exp(-0.5 * (dx * dx + dy * dy));
   }
   return F;
 }
@@ -127,21 +185,21 @@ function potential(x, y) {
 function gradient(x, y, out) {
   let gx = state.confine * x / (state.aspect * state.aspect);
   let gy = state.confine * y;
-  for (const w of state.wells) {
+  for (const w of state.gauss) {
     const dx = (x - w.x) / w.sx, dy = (y - w.y) / w.sy;
-    const e = w.depth * Math.exp(-0.5 * (dx * dx + dy * dy));
+    const e = w.d * Math.exp(-0.5 * (dx * dx + dy * dy));
     gx += e * dx / w.sx;
     gy += e * dy / w.sy;
   }
   out[0] = gx; out[1] = gy;
 }
 
+// Basin indices are macrostates: landing in any sub-well of |résumé⟩ counts as |résumé⟩.
 function nearestBasin(x, y) {
   let best = 0, bestD = Infinity;
-  for (let i = 0; i < state.wells.length; i++) {
-    const w = state.wells[i];
+  for (const w of state.gauss) {
     const d = ((x - w.x) / w.sx) ** 2 + ((y - w.y) / w.sy) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
+    if (d < bestD) { bestD = d; best = w.macro; }
   }
   return best;
 }
@@ -149,11 +207,18 @@ function nearestBasin(x, y) {
 // another well's core, so saddle-point flicker doesn't count as a transition.
 const CORE = 1.3 * 1.3;
 function coreBasin(x, y) {
-  for (let i = 0; i < state.wells.length; i++) {
-    const w = state.wells[i];
-    if (((x - w.x) / w.sx) ** 2 + ((y - w.y) / w.sy) ** 2 < CORE) return i;
+  for (const w of state.gauss) {
+    if (((x - w.x) / w.sx) ** 2 + ((y - w.y) / w.sy) ** 2 < CORE) return w.macro;
   }
   return -1;
+}
+function nearestSub(w, x, y) {
+  let best = w.subs[0], bestD = Infinity;
+  for (const s of w.subs) {
+    const d = (x - s.x) ** 2 + (y - s.y) ** 2;
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  return best;
 }
 
 // ---------- rendering the landscape (once per seed / theme / resize) ----------
@@ -173,8 +238,113 @@ const isLight = () => document.documentElement.dataset.theme === 'light';
 const palette = { accent: '#b7a6ff', ink: '#ececf1' };
 function refreshPalette() { palette.accent = cssColor('--accent'); palette.ink = cssColor('--ink'); }
 
+// ---------- the landscape on the GPU ----------
+// The same picture as the CPU path below, evaluated per pixel every frame in a
+// fragment shader so the wells can breathe. Contours are antialiased from the
+// level's screen-space derivative, so a slowly moving ring glides instead of
+// stepping from pixel to pixel. Holds up to 8 gaussians (we use 6).
+function initGL() {
+  const gl = glCanvas?.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' });
+  if (!gl) return null;
+  const vs = `#version 300 es
+void main() { // one triangle covering the screen
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+  const fs = `#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform float uAspect, uConfine, uFmin, uRange, uTint, uHalfWidth;
+uniform int uN;
+uniform vec4 uG[8];   // x, y, sx, sy
+uniform float uD[8];  // current (breathing) depth
+uniform vec3 uBg, uSoft, uLine, uAcc;
+out vec4 color;
+void main() {
+  vec2 p = gl_FragCoord.xy / uRes;
+  float x = (p.x * 2.0 - 1.0) * uAspect, y = 1.0 - p.y * 2.0;
+  float F = 0.5 * uConfine * ((x / uAspect) * (x / uAspect) + y * y);
+  for (int i = 0; i < 8; i++) {
+    if (i >= uN) break;
+    vec2 d = (vec2(x, y) - uG[i].xy) / uG[i].zw;
+    F -= uD[i] * exp(-0.5 * dot(d, d));
+  }
+  float depth = 1.0 - (F - uFmin) / uRange; // 1 at the deepest point
+  float dc = clamp(depth, 0.0, 1.0);
+  vec3 c = mix(uBg, uSoft, pow(dc, 1.6));
+  c = mix(c, uAcc, uTint * dc * dc * dc);
+  float lv = depth * 14.0;
+  float dist = abs(lv - floor(lv + 0.5)) / max(fwidth(lv), 1e-6); // device px to the nearest contour
+  float major = mod(floor(lv + 0.5), 4.0) < 0.5 ? 0.9 : 0.45;
+  c = mix(c, uLine, major * (1.0 - smoothstep(uHalfWidth - 0.5, uHalfWidth + 0.5, dist)));
+  color = vec4(c, 1.0);
+}`;
+  const prog = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    gl.attachShader(prog, s);
+  }
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  const u = {};
+  for (const name of ['uRes', 'uAspect', 'uConfine', 'uFmin', 'uRange', 'uTint', 'uHalfWidth', 'uN', 'uG', 'uD', 'uBg', 'uSoft', 'uLine', 'uAcc']) {
+    u[name] = gl.getUniformLocation(prog, name);
+  }
+  // if the GPU drops the context, fall back to the CPU picture
+  glCanvas.addEventListener('webglcontextlost', () => { land = null; renderLandscape(); draw(); });
+  return { gl, u };
+}
+
+// Per seed / theme / resize: colours, and the depth scale. The scale comes
+// from the resting depths so breathing moves the rings, not the whole map.
+function prepareLandscapeGL() {
+  let fmin = Infinity, fmax = -Infinity;
+  const nx = 128, ny = 80;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const f = potential((((i + 0.5) / nx) * 2 - 1) * state.aspect, ((j + 0.5) / ny) * 2 - 1, true);
+      if (f < fmin) fmin = f; if (f > fmax) fmax = f;
+    }
+  }
+  for (const w of state.gauss) fmin = Math.min(fmin, potential(w.x, w.y, true));
+  const { gl, u } = land;
+  const rgb = name => hexToRgb(cssColor(name)).map(v => v / 255);
+  gl.uniform1f(u.uFmin, fmin);
+  gl.uniform1f(u.uRange, fmax - fmin || 1);
+  gl.uniform3fv(u.uBg, rgb('--bg'));
+  gl.uniform3fv(u.uSoft, rgb('--soft'));
+  gl.uniform3fv(u.uLine, rgb('--line'));
+  gl.uniform3fv(u.uAcc, rgb('--accent'));
+  gl.uniform1f(u.uTint, isLight() ? 0.10 : 0.16);
+}
+
+const gaussBuf = new Float32Array(8 * 4), depthBuf = new Float32Array(8);
+function drawLandscapeGL() {
+  const { gl, u } = land;
+  const n = Math.min(8, state.gauss.length);
+  for (let i = 0; i < n; i++) {
+    const w = state.gauss[i];
+    gaussBuf[4 * i] = w.x; gaussBuf[4 * i + 1] = w.y; gaussBuf[4 * i + 2] = w.sx; gaussBuf[4 * i + 3] = w.sy;
+    depthBuf[i] = w.d;
+  }
+  gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+  gl.uniform2f(u.uRes, glCanvas.width, glCanvas.height);
+  gl.uniform1f(u.uAspect, state.aspect);
+  gl.uniform1f(u.uConfine, state.confine);
+  gl.uniform1f(u.uHalfWidth, 0.85 * dpr);
+  gl.uniform1i(u.uN, n);
+  gl.uniform4fv(u.uG, gaussBuf);
+  gl.uniform1fv(u.uD, depthBuf);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// ---------- the landscape on the CPU (fallback, drawn once) ----------
 function renderLandscape() {
   refreshPalette();
+  if (land) { prepareLandscapeGL(); return; }
   const cell = 2; // CSS px per sample
   const gw = Math.max(1, Math.ceil(width / cell)), gh = Math.max(1, Math.ceil(height / cell));
   const F = new Float32Array(gw * gh);
@@ -231,8 +401,9 @@ function spawnParticles() {
   state.basin = new Int8Array(state.n);
   state.trails = new Float32Array(state.n * TRAIL * 2);
   for (let i = 0; i < state.n; i++) {
-    // start inside a random well so the ensemble is already near equilibrium
-    const w = state.wells[Math.floor(Math.random() * state.wells.length)];
+    // start inside a random basin (and sub-well) so the ensemble is already near equilibrium
+    const m = state.wells[Math.floor(Math.random() * state.wells.length)];
+    const w = m.subs ? m.subs[Math.floor(Math.random() * m.subs.length)] : m;
     const x = w.x + randn() * w.sx * 0.6, y = w.y + randn() * w.sy * 0.6;
     state.particles[2 * i] = x; state.particles[2 * i + 1] = y;
     state.basin[i] = nearestBasin(x, y);
@@ -262,7 +433,11 @@ function step(record = true) {
       const e = ps * Math.exp(-d2 / (2 * pr * pr));
       fx += e * dx / pr; fy += e * dy / pr;
     }
-    if (col) { fx += (col.x - x) * pull; fy += (col.y - y) * pull; }
+    if (col) {
+      // a macrostate keeps its microstates: each particle settles into the nearest sub-well
+      const t = col.subs ? nearestSub(col, x, y) : col;
+      fx += (t.x - x) * pull; fy += (t.y - y) * pull;
+    }
     x += fx * DT + noise * randn();
     y += fy * DT + noise * randn();
     // reflect at the edges
@@ -289,9 +464,11 @@ function recordTrails() {
 const toPx = (x, y) => [((x / state.aspect) + 1) * 0.5 * width, (y + 1) * 0.5 * height];
 
 function draw() {
+  if (land) drawLandscapeGL();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = true;
-  if (bg) ctx.drawImage(bg, 0, 0, width, height);
+  if (land) ctx.clearRect(0, 0, width, height);
+  else if (bg) ctx.drawImage(bg, 0, 0, width, height);
   const acc = palette.accent, ink = palette.ink;
   const P = state.particles, T = state.trails, h = state.trailHead;
   const light = isLight();
@@ -342,35 +519,127 @@ function draw() {
 }
 
 // ---------- basin labels ----------
+function makeLink(d, className) {
+  const a = document.createElement('a');
+  a.className = className;
+  a.href = d.href;
+  a.textContent = d.label;
+  if (d.title) a.title = d.title;
+  if (!d.href.startsWith('#') && !d.href.startsWith('/')) a.rel = 'noopener noreferrer';
+  return a;
+}
+// A macrostate's label sits in a .macro group with one .micro label per
+// sub-well; the micro labels wait at the basin centre until the group splits.
 function buildLabels() {
   basinsEl.innerHTML = '';
   state.wells.forEach((w, i) => {
     const d = DESTINATIONS[i];
-    const a = document.createElement('a');
-    a.className = 'basin';
-    a.href = d.href;
-    a.textContent = d.label;
+    const a = makeLink(d, 'basin');
     a.dataset.i = i;
-    if (!d.href.startsWith('#') && !d.href.startsWith('/')) a.rel = 'noopener noreferrer';
-    basinsEl.appendChild(a);
+    if (!d.states) { basinsEl.appendChild(a); return; }
+    const group = document.createElement('div');
+    group.className = 'macro';
+    a.setAttribute('aria-expanded', 'false');
+    group.append(a, ...d.states.map((s, k) => {
+      const m = makeLink(s, 'basin micro');
+      m.style.setProperty('--k', k);
+      return m;
+    }));
+    basinsEl.appendChild(group);
   });
   placeLabels();
+  updateSplit();
 }
 function placeLabels() {
-  basinsEl.querySelectorAll('.basin').forEach(a => {
+  const labels = [...basinsEl.querySelectorAll('.basin[data-i]')];
+  for (const a of labels) {
     const w = state.wells[+a.dataset.i];
     const [px, py] = toPx(w.x, w.y);
     a.style.left = px + 'px';
     a.style.top = py + 'px';
+  }
+  for (const a of labels) {
+    const w = state.wells[+a.dataset.i];
+    if (w.subs) placeMicro(a, w, labels.filter(o => o !== a));
+  }
+}
+// Each micro label goes on its sub-well if that spot is free; otherwise it
+// spirals outward (starting away from the basin centre) to the nearest spot
+// clear of the other labels and the hero furniture, below the top controls.
+function placeMicro(macro, w, otherLabels) {
+  const s = stage.getBoundingClientRect();
+  const rectBox = r => ({ x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2, w: r.width, h: r.height });
+  const labelBox = el => ({ x: parseFloat(el.style.left), y: parseFloat(el.style.top), w: el.offsetWidth, h: el.offsetHeight });
+  const taken = [
+    labelBox(macro),
+    ...otherLabels.map(labelBox),
+    ...['.scene', '.caption', '.links'].map(sel => rectBox(document.querySelector(sel).getBoundingClientRect())),
+  ];
+  const gap = 6;
+  const hits = (b, x, y) => taken.some(q => Math.abs(x - q.x) < (b.w + q.w) / 2 + gap && Math.abs(y - q.y) < (b.h + q.h) / 2 + gap);
+  const [cx, cy] = toPx(w.x, w.y);
+  [...macro.parentElement.querySelectorAll('.micro')].forEach((el, k) => {
+    const b = { w: el.offsetWidth, h: el.offsetHeight };
+    const inX = x => Math.min(Math.max(x, b.w / 2 + 8), width - b.w / 2 - 8);
+    const inY = y => Math.min(Math.max(y, 72 + b.h / 2), height - b.h / 2 - 8);
+    const [x0, y0] = toPx(w.subs[k].x, w.subs[k].y);
+    const away = Math.atan2(y0 - cy, x0 - cx);
+    b.x = inX(x0); b.y = inY(y0);
+    search: for (let r = 0; r <= 160; r += 8) {
+      for (let j = 0; j < (r ? 16 : 1); j++) {
+        const t = away + (j % 2 ? -1 : 1) * Math.ceil(j / 2) * Math.PI / 8;
+        const x = inX(x0 + r * Math.cos(t)), y = inY(y0 + r * Math.sin(t));
+        if (!hits(b, x, y)) { b.x = x; b.y = y; break search; }
+      }
+    }
+    taken.push(b);
+    el.style.left = cx + 'px';
+    el.style.top = cy + 'px';
+    el.style.setProperty('--dx', (b.x - cx).toFixed(1) + 'px');
+    el.style.setProperty('--dy', (b.y - cy).toFixed(1) + 'px');
   });
 }
 function styleLabels() {
-  basinsEl.querySelectorAll('.basin').forEach(a => {
+  basinsEl.querySelectorAll('.basin[data-i]').forEach(a => {
     const i = +a.dataset.i;
     a.classList.toggle('collapsed', state.collapsed === i);
     a.classList.toggle('faded', state.collapsed >= 0 && state.collapsed !== i);
   });
+  updateSplit();
 }
+
+// ---------- the macrostate splitting ----------
+// Resolved while the pointer is over the basin, while keyboard focus is inside
+// it, after a tap on its label (touch has no hover), or when measured into.
+const split = { hover: false, focus: false, tap: false };
+function updateSplit() {
+  const group = basinsEl.querySelector('.macro');
+  if (!group) return;
+  const on = split.hover || split.focus || split.tap || state.collapsed === MACRO;
+  group.classList.toggle('split', on);
+  group.firstElementChild.setAttribute('aria-expanded', String(on));
+}
+function hoverSplit(x, y) {
+  const w = state.wells[MACRO];
+  if (!w) return;
+  // hysteresis: resolve inside reach, merge again only well outside it
+  const near = Math.hypot(x - w.x, y - w.y) < w.reach * (split.hover ? 1.4 : 1);
+  if (near !== split.hover) { split.hover = near; updateSplit(); }
+}
+basinsEl.addEventListener('click', e => {
+  // first tap on a merged |résumé⟩ resolves it; once resolved, the label leads to #resume
+  const a = e.target.closest('.macro > .basin:not(.micro)');
+  if (!a || a.parentElement.classList.contains('split')) return;
+  e.preventDefault();
+  split.tap = true;
+  updateSplit();
+});
+basinsEl.addEventListener('focusin', e => {
+  if (e.target.closest('.macro') && e.target.matches(':focus-visible')) { split.focus = true; updateSplit(); }
+});
+basinsEl.addEventListener('focusout', e => {
+  if (e.target.closest('.macro') && !e.relatedTarget?.closest?.('.macro')) { split.focus = false; updateSplit(); }
+});
 
 // ---------- controls ----------
 function setSeed(seed, { pushUrl = true } = {}) {
@@ -380,6 +649,7 @@ function setSeed(seed, { pushUrl = true } = {}) {
   state.wells = buildWells(state.seed);
   renderLandscape();
   spawnParticles();
+  split.tap = false;
   buildLabels();
   if (pushUrl) {
     const url = new URL(location.href);
@@ -406,13 +676,13 @@ function measure() {
   state.collapseT = 0;
   state.kT = state.baseKT * 0.25;
   measureBtn.setAttribute('aria-pressed', 'true');
+  startCube();
   measureBtn.setAttribute('aria-label', `Collapsed into ${DESTINATIONS[pick].label}. Tap again for a new measurement; click the landscape to release`);
   showInside(() => {
+    // a macrostate shows up in the box as its microstates
     const d = DESTINATIONS[pick];
-    const a = document.createElement('a');
-    a.href = d.href; a.textContent = d.label;
-    if (d.href.startsWith('http')) a.rel = 'noopener noreferrer';
-    insideEl.replaceChildren(a);
+    insideEl.classList.toggle('kets', !!d.states);
+    insideEl.replaceChildren(...(d.states || [d]).map(s => makeLink(s, '')));
   });
   styleLabels();
   if (state.paused) { for (let s = 0; s < 400; s++) { state.collapseT += DT * SUBSTEPS * 6; step(); } recordTrails(); draw(); }
@@ -422,8 +692,9 @@ function uncollapse() {
   state.collapseT = 0;
   state.kT = state.baseKT;
   measureBtn.setAttribute('aria-pressed', 'false');
+  startCube();
   measureBtn.setAttribute('aria-label', 'The uncertainty box. Tap to measure the system and collapse it into one basin');
-  if (insideEl.firstElementChild) showInside(() => { insideEl.textContent = 'tap to measure'; });
+  if (insideEl.firstElementChild) showInside(() => { insideEl.classList.remove('kets'); insideEl.textContent = 'tap to measure'; });
   styleLabels();
 }
 // Cross-fade the text inside the box.
@@ -437,7 +708,8 @@ function setPaused(p) {
   document.body.classList.toggle('paused', p);
   pauseBtn.setAttribute('aria-pressed', String(p));
   pauseBtn.setAttribute('aria-label', p ? 'Resume animation' : 'Pause animation');
-  if (!p && !raf) raf = requestAnimationFrame(frame);
+  if (!p && !raf && heroVisible) { last = 0; raf = requestAnimationFrame(frame); }
+  startCube(); // the idle spin follows play/pause
 }
 
 function setTheme(t) {
@@ -455,23 +727,23 @@ function resize() {
   width = Math.max(1, Math.round(rect.width));
   height = Math.max(1, Math.round(rect.height));
   dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
+  canvas.width = glCanvas.width = Math.round(width * dpr);
+  canvas.height = glCanvas.height = Math.round(height * dpr);
   const newAspect = width / height;
   if (Math.abs(newAspect - state.aspect) > 1e-6) {
     // world x-extent follows the aspect ratio; rescale so wells keep their relative place
     const k = newAspect / state.aspect;
     state.aspect = newAspect;
-    for (const w of state.wells) w.x *= k;
+    for (const w of state.wells) { w.x *= k; w.subs?.forEach(s => { s.x *= k; }); }
     if (state.particles) for (let i = 0; i < state.n; i++) state.particles[2 * i] *= k;
     if (state.trails) for (let i = 0; i < state.trails.length; i += 2) state.trails[i] *= k;
   }
-  const small = isSmall() || state.aspect < 0.9;
+  const small = isPortrait();
   if (wasSmall !== null && small !== wasSmall && state.wells.length) { wasSmall = small; setSeed(state.seed, { pushUrl: false }); return; }
   wasSmall = small;
   placeLabels();
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { renderLandscape(); draw(); }, 120);
+  if (land) renderLandscape(); // cheap on the GPU path
+  else { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { renderLandscape(); draw(); }, 120); }
   draw();
 }
 let resizeTimer = 0;
@@ -480,9 +752,11 @@ let resizeTimer = 0;
 let raf = 0, last = 0, statTick = 0;
 function frame(now) {
   raf = 0;
-  if (state.paused) return;
+  if (state.paused || !heroVisible) return;
   const dtFrame = Math.min(34, now - (last || now));
   last = now;
+  state.time += dtFrame / 1000;
+  breathe(state.time);
   const subs = Math.max(1, Math.round(SUBSTEPS * dtFrame / 16.7));
   if (state.collapsed >= 0) state.collapseT += dtFrame / 900;
   for (let s = 0; s < subs; s++) step();
@@ -491,6 +765,15 @@ function frame(now) {
   if (now - statTick > 500) { statTick = now; updateStat(now); }
   raf = requestAnimationFrame(frame);
 }
+// Nothing in the hero needs to run while it is scrolled out of view.
+let heroVisible = true;
+new IntersectionObserver(([entry]) => {
+  heroVisible = entry.isIntersecting;
+  if (!heroVisible) return;
+  if (!state.paused && !raf) { last = 0; raf = requestAnimationFrame(frame); }
+  startCube();
+}).observe(stage);
+
 function updateStat(now) {
   const window_ = 3000;
   while (state.hops.length && now - state.hops[0] > window_) state.hops.shift();
@@ -498,6 +781,80 @@ function updateStat(now) {
   const mode = state.collapsed >= 0 ? `collapsed → ${DESTINATIONS[state.collapsed].label}` : `${rate} hops/s`;
   statEl.textContent = `${state.wells.length} basins · kT ${state.kT.toFixed(2)} · ${mode}`;
 }
+
+// ---------- the uncertainty box ----------
+// The cube is driven from here rather than by a CSS animation so it can ease
+// between its idle spin; a hover, where it slows, lifts, leans toward the
+// pointer and wobbles a little (something is moving in there); a squash when
+// pressed; and turning to face you when opened. All smoothing is exponential,
+// so every change of state is gentle. The idle spin and the wobble follow the
+// play/pause state (reduced motion starts paused); the hover lean only moves
+// when the pointer does, so it always responds. When nothing is left to
+// animate the loop sleeps, and the pointer, a press, play or a measurement wake it.
+const cubeState = {
+  yaw: 30, pitch: -18, scale: 1, speed: 0,        // degrees, degrees per second (eases up to the idle spin)
+  hovering: false, hover: 0,                      // pointer over the box, and its eased 0..1
+  aimX: 0, aimY: 0, tiltX: 0, tiltY: 0,           // pointer offset from the cube centre (−1..1), eased
+  kick: 0,                                        // press squash, decays
+  t: 0, last: 0, raf: 0,
+};
+function cubeFrame(now) {
+  const c = cubeState;
+  c.raf = 0;
+  if (!heroVisible) return;
+  const dt = Math.min(0.05, (now - (c.last || now)) / 1000);
+  c.last = now;
+  c.t += dt;
+  const ease = rate => 1 - Math.exp(-rate * dt);
+  const open = measureBtn.getAttribute('aria-pressed') === 'true';
+  const still = state.paused;
+  c.hover += ((c.hovering ? 1 : 0) - c.hover) * ease(5);
+  c.tiltX += (c.aimX * c.hover - c.tiltX) * ease(7);
+  c.tiltY += (c.aimY * c.hover - c.tiltY) * ease(7);
+  c.kick -= c.kick * ease(9);
+  const front = Math.round(c.yaw / 360) * 360;
+  if (open) {
+    // stop spinning and turn the nearest way round to face front
+    c.speed -= c.speed * ease(8);
+    c.yaw += (front - c.yaw) * ease(5);
+  } else {
+    // idle: a turn every 28 s; hovered: a fifth of that; paused: none
+    c.speed += ((still ? 0 : (360 / 28) * (1 - 0.8 * c.hover)) - c.speed) * ease(3);
+    c.yaw += c.speed * dt;
+  }
+  const pitchTo = open ? 0 : -18, scaleTo = open ? 1.08 : 1 + 0.05 * c.hover;
+  c.pitch += (pitchTo - c.pitch) * ease(6);
+  c.scale += (scaleTo - c.scale) * ease(6);
+  const lean = open ? 0.35 : 1; // opened, it only glances at the pointer
+  const wobble = open || still ? 0 : c.hover;
+  const roll = wobble * (2.2 * Math.sin(c.t * 5.3) + 1.1 * Math.sin(c.t * 8.7 + 1.3));
+  const lift = -6 * c.hover * lean + wobble * 1.5 * Math.sin(c.t * 3.1);
+  cube.style.transform =
+    `translateY(${lift.toFixed(2)}px) rotateZ(${roll.toFixed(2)}deg) ` +
+    `rotateX(${(c.pitch - c.tiltY * 24 * lean).toFixed(2)}deg) ` +
+    `rotateY(${(c.yaw + c.tiltX * 32 * lean).toFixed(2)}deg) ` +
+    `scale(${(c.scale * (1 - 0.07 * c.kick)).toFixed(4)})`;
+  const settled = still && !c.hovering && c.hover < 1e-3 && Math.abs(c.speed) < 0.01 && c.kick < 1e-3 &&
+    Math.abs(c.tiltX) < 1e-3 && Math.abs(c.tiltY) < 1e-3 && Math.abs(pitchTo - c.pitch) < 0.01 &&
+    Math.abs(scaleTo - c.scale) < 1e-4 && (!open || Math.abs(front - c.yaw) < 0.01);
+  if (!settled) c.raf = requestAnimationFrame(cubeFrame);
+}
+function startCube() {
+  if (cubeState.raf || !heroVisible) return;
+  cubeState.last = 0;
+  cubeState.raf = requestAnimationFrame(cubeFrame);
+}
+boxEl.addEventListener('pointermove', e => {
+  if (e.pointerType === 'touch') return;
+  const r = measureBtn.getBoundingClientRect();
+  const clamp1 = v => Math.max(-1, Math.min(1, v));
+  cubeState.aimX = clamp1((e.clientX - r.left - r.width / 2) / (r.width * 0.75));
+  cubeState.aimY = clamp1((e.clientY - r.top - r.height / 2) / (r.height * 0.75));
+  cubeState.hovering = true;
+  startCube();
+});
+boxEl.addEventListener('pointerleave', () => { cubeState.hovering = false; });
+measureBtn.addEventListener('pointerdown', () => { cubeState.kick = 1; startCube(); });
 
 // ---------- pointer ----------
 function pointerToWorld(e) {
@@ -509,9 +866,11 @@ function pointerToWorld(e) {
 stage.addEventListener('pointermove', e => {
   const [x, y] = pointerToWorld(e);
   state.pointer.x = x; state.pointer.y = y; state.pointer.active = true;
+  if (e.pointerType === 'mouse') hoverSplit(x, y);
 });
 stage.addEventListener('pointerdown', e => {
   if (e.target.closest('.basin')) return;
+  if (split.tap) { split.tap = false; updateSplit(); }
   if (state.collapsed >= 0) uncollapse(); // clicking the landscape resets the measurement
   const [x, y] = pointerToWorld(e);
   state.pointer.x = x; state.pointer.y = y; state.pointer.active = true; state.pointer.pressed = true;
@@ -520,7 +879,10 @@ stage.addEventListener('pointerdown', e => {
 const release = () => { state.pointer.pressed = false; };
 stage.addEventListener('pointerup', release);
 stage.addEventListener('pointercancel', release);
-stage.addEventListener('pointerleave', () => { state.pointer.active = false; state.pointer.pressed = false; });
+stage.addEventListener('pointerleave', () => {
+  state.pointer.active = false; state.pointer.pressed = false;
+  if (split.hover) { split.hover = false; updateSplit(); }
+});
 
 // ---------- wiring ----------
 randomizeBtn.addEventListener('click', () => setSeed(randomSeed()));
@@ -556,3 +918,4 @@ resize();
 setSeed(state.seed, { pushUrl: !!seedParam });
 setPaused(state.paused);
 updateStat(performance.now());
+startCube();
